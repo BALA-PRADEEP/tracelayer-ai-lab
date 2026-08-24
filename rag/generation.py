@@ -1,9 +1,10 @@
 import json
 import os
+import socket
 from time import perf_counter
-
-from google import genai
-from google.genai import types
+from urllib import error as urllib_error
+from urllib import parse as urllib_parse
+from urllib import request as urllib_request
 
 from rag.retrieval import semantic_project_search
 
@@ -11,24 +12,17 @@ GENERATION_MODEL = os.getenv("GEMINI_GENERATION_MODEL", "gemini-3.7-flash")
 FALLBACK_GENERATION_MODEL = os.getenv(
     "GEMINI_GENERATION_FALLBACK_MODEL", "gemini-3.6-flash"
 )
-GENERATION_TIMEOUT_MS = int(os.getenv("GEMINI_GENERATION_TIMEOUT_MS", "8000"))
-_generation_client = None
+GENERATION_TIMEOUT_SECONDS = float(
+    os.getenv("GEMINI_GENERATION_TIMEOUT_SECONDS", "8")
+)
+GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
-def get_generation_client():
-    global _generation_client
-    if _generation_client is None:
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise RuntimeError("GEMINI_API_KEY is required")
-        _generation_client = genai.Client(
-            api_key=api_key,
-            http_options=types.HttpOptions(
-                timeout=GENERATION_TIMEOUT_MS,
-                retry_options=types.HttpRetryOptions(attempts=1),
-            ),
-        )
-    return _generation_client
+class GeminiRESTError(Exception):
+    def __init__(self, code: int | None = None, status: str | None = None):
+        self.code = code
+        self.status = status
+        super().__init__(f"Gemini REST error: {code or 'unknown'} {status or 'unknown'}")
 
 
 def _error_signature(exc: Exception) -> str:
@@ -43,27 +37,79 @@ def _error_signature(exc: Exception) -> str:
     return ":".join(parts)
 
 
-def _is_transient_generation_error(exc: Exception) -> bool:
+def _should_try_fallback(exc: Exception) -> bool:
     code = getattr(exc, "code", None)
-    if code in {408, 429, 500, 502, 503, 504}:
+    if code in {400, 408, 429, 500, 502, 503, 504}:
         return True
-    return type(exc).__name__ in {
-        "ServerError",
-        "TimeoutException",
-        "ReadTimeout",
-        "ConnectTimeout",
-        "ConnectError",
-    }
+    return isinstance(exc, (TimeoutError, socket.timeout, urllib_error.URLError))
 
 
-def _generate(prompt: str, model: str):
-    # Keep the request deliberately minimal. This matches Google's documented
-    # Gemini GenerateContent quickstart and avoids model-specific config fields
-    # causing INVALID_ARGUMENT responses in the deployed SDK/runtime.
-    return get_generation_client().models.generate_content(
-        model=model,
-        contents=prompt,
+def _extract_error_metadata(body: bytes) -> tuple[int | None, str | None]:
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except Exception:
+        return None, None
+
+    error = payload.get("error") or {}
+    return error.get("code"), error.get("status")
+
+
+def _extract_generated_text(payload: dict) -> str:
+    texts = []
+    for candidate in payload.get("candidates") or []:
+        content = candidate.get("content") or {}
+        for part in content.get("parts") or []:
+            text = part.get("text")
+            if text:
+                texts.append(text)
+    return "\n".join(texts).strip()
+
+
+def _generate(prompt: str, model: str) -> str:
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY is required")
+
+    model_path = urllib_parse.quote(model, safe="")
+    url = f"{GEMINI_API_BASE}/{model_path}:generateContent"
+    payload = json.dumps(
+        {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": prompt}],
+                }
+            ]
+        }
+    ).encode("utf-8")
+
+    request = urllib_request.Request(
+        url,
+        data=payload,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "x-goog-api-key": api_key,
+        },
     )
+
+    try:
+        with urllib_request.urlopen(
+            request,
+            timeout=GENERATION_TIMEOUT_SECONDS,
+        ) as response:
+            response_payload = json.loads(response.read().decode("utf-8"))
+    except urllib_error.HTTPError as exc:
+        body = exc.read()
+        body_code, status = _extract_error_metadata(body)
+        raise GeminiRESTError(body_code or exc.code, status) from exc
+    except (urllib_error.URLError, TimeoutError, socket.timeout) as exc:
+        raise exc
+
+    text = _extract_generated_text(response_payload)
+    if not text:
+        raise GeminiRESTError(None, "EMPTY_RESPONSE")
+    return text
 
 
 def _build_evidence(hits: list[dict]) -> tuple[str, list[dict]]:
@@ -141,6 +187,7 @@ def generate_grounded_answer(
             "generation_model": GENERATION_MODEL,
             "generation_model_used": None,
             "fallback_used": False,
+            "generation_transport": "rest_v1beta",
             "total_duration_ms": round((perf_counter() - started) * 1000, 2),
         }
 
@@ -178,10 +225,10 @@ Evidence:
     primary_error_signature = None
 
     try:
-        response = _generate(prompt, GENERATION_MODEL)
+        answer = _generate(prompt, GENERATION_MODEL)
     except Exception as exc:
         primary_error_signature = _error_signature(exc)
-        if not _is_transient_generation_error(exc):
+        if not _should_try_fallback(exc):
             raise RuntimeError(
                 f"gemini_generation_failed:primary:{primary_error_signature}"
             ) from exc
@@ -200,7 +247,7 @@ Evidence:
             }
         )
         try:
-            response = _generate(prompt, FALLBACK_GENERATION_MODEL)
+            answer = _generate(prompt, FALLBACK_GENERATION_MODEL)
         except Exception as fallback_exc:
             fallback_signature = _error_signature(fallback_exc)
             raise RuntimeError(
@@ -211,16 +258,15 @@ Evidence:
 
     generation_ms = round((perf_counter() - generation_started) * 1000, 2)
 
-    answer = (response.text or "").strip()
-    if not answer:
-        raise RuntimeError("gemini_generation_failed:EmptyResponse")
-
     used_citations = [item for item in evidence_items if f"[{item['id']}]" in answer]
+    if not used_citations:
+        raise RuntimeError("gemini_generation_failed:UncitedResponse")
+
     trace.append(
         {
             "step": "Generation completed",
             "status": "complete",
-            "detail": f"Generated grounded answer with {model_used}.",
+            "detail": f"Generated grounded answer with {model_used} via Gemini REST.",
             "duration_ms": generation_ms,
         }
     )
@@ -257,6 +303,7 @@ Evidence:
         "fallback_model": FALLBACK_GENERATION_MODEL,
         "fallback_used": fallback_used,
         "primary_error_signature": primary_error_signature,
-        "generation_timeout_ms": GENERATION_TIMEOUT_MS,
+        "generation_timeout_seconds": GENERATION_TIMEOUT_SECONDS,
+        "generation_transport": "rest_v1beta",
         "total_duration_ms": round((perf_counter() - started) * 1000, 2),
     }
