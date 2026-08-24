@@ -104,7 +104,7 @@ Rules:
 - Prefer the highest-scoring directly relevant evidence.
 - If the question's wording is more specific than the evidence supports, correct the framing clearly.
 - Distinguish whole-project variance from material-only variance.
-- Keep the answer concise but explanatory.
+- Keep the answer concise: no more than 180 words.
 
 Question:
 {question}
@@ -118,7 +118,8 @@ Evidence:
         model=GENERATION_MODEL,
         contents=prompt,
         config=types.GenerateContentConfig(
-            temperature=0.1,
+            thinking_config=types.ThinkingConfig(thinking_level="low"),
+            max_output_tokens=500,
         ),
     )
     generation_ms = round((perf_counter() - generation_started) * 1000, 2)
@@ -132,7 +133,7 @@ Evidence:
         {
             "step": "Generation completed",
             "status": "complete",
-            "detail": f"Generated grounded answer with {GENERATION_MODEL}.",
+            "detail": f"Generated grounded answer with {GENERATION_MODEL} at low thinking level.",
             "duration_ms": generation_ms,
         }
     )
