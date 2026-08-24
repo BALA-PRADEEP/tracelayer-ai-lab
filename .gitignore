@@ -1,0 +1,22 @@
+# Node
+node_modules/
+.next/
+out/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Tooling
+.vercel/
+.DS_Store
+coverage/
+playwright-report/
+test-results/
