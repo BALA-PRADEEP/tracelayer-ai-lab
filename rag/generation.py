@@ -2,11 +2,30 @@ import json
 import os
 from time import perf_counter
 
+from google import genai
 from google.genai import types
 
-from rag.retrieval import get_gemini_client, semantic_project_search
+from rag.retrieval import semantic_project_search
 
 GENERATION_MODEL = os.getenv("GEMINI_GENERATION_MODEL", "gemini-3.7-flash")
+GENERATION_TIMEOUT_MS = int(os.getenv("GEMINI_GENERATION_TIMEOUT_MS", "12000"))
+_generation_client = None
+
+
+def get_generation_client():
+    global _generation_client
+    if _generation_client is None:
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise RuntimeError("GEMINI_API_KEY is required")
+        _generation_client = genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(
+                timeout=GENERATION_TIMEOUT_MS,
+                retry_options=types.HttpRetryOptions(attempts=1),
+            ),
+        )
+    return _generation_client
 
 
 def _build_evidence(hits: list[dict]) -> tuple[str, list[dict]]:
@@ -114,19 +133,22 @@ Evidence:
 """
 
     generation_started = perf_counter()
-    response = get_gemini_client().models.generate_content(
-        model=GENERATION_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            thinking_config=types.ThinkingConfig(thinking_level="low"),
-            max_output_tokens=500,
-        ),
-    )
+    try:
+        response = get_generation_client().models.generate_content(
+            model=GENERATION_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(thinking_level="low"),
+                max_output_tokens=500,
+            ),
+        )
+    except Exception as exc:
+        raise RuntimeError(f"gemini_generation_failed:{type(exc).__name__}") from exc
     generation_ms = round((perf_counter() - generation_started) * 1000, 2)
 
     answer = (response.text or "").strip()
     if not answer:
-        raise RuntimeError("Gemini did not return a grounded answer")
+        raise RuntimeError("gemini_generation_failed:EmptyResponse")
 
     used_citations = [item for item in evidence_items if f"[{item['id']}]" in answer]
     trace.append(
@@ -166,5 +188,6 @@ Evidence:
         "execution": trace,
         "mode": "rag_grounded_answer",
         "generation_model": GENERATION_MODEL,
+        "generation_timeout_ms": GENERATION_TIMEOUT_MS,
         "total_duration_ms": round((perf_counter() - started) * 1000, 2),
     }
