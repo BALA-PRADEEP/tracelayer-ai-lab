@@ -31,9 +31,21 @@ def get_generation_client():
     return _generation_client
 
 
+def _error_signature(exc: Exception) -> str:
+    error_type = type(exc).__name__
+    code = getattr(exc, "code", None)
+    status = getattr(exc, "status", None)
+    parts = [error_type]
+    if code is not None:
+        parts.append(str(code))
+    if status:
+        parts.append(str(status))
+    return ":".join(parts)
+
+
 def _is_transient_generation_error(exc: Exception) -> bool:
     code = getattr(exc, "code", None)
-    if code in {408, 500, 502, 503, 504}:
+    if code in {408, 429, 500, 502, 503, 504}:
         return True
     return type(exc).__name__ in {
         "ServerError",
@@ -164,14 +176,16 @@ Evidence:
     generation_started = perf_counter()
     model_used = GENERATION_MODEL
     fallback_used = False
-    primary_error_type = None
+    primary_error_signature = None
 
     try:
         response = _generate(prompt, GENERATION_MODEL)
     except Exception as exc:
-        primary_error_type = type(exc).__name__
+        primary_error_signature = _error_signature(exc)
         if not _is_transient_generation_error(exc):
-            raise RuntimeError(f"gemini_generation_failed:{primary_error_type}") from exc
+            raise RuntimeError(
+                f"gemini_generation_failed:primary:{primary_error_signature}"
+            ) from exc
 
         fallback_used = True
         model_used = FALLBACK_GENERATION_MODEL
@@ -180,7 +194,7 @@ Evidence:
                 "step": "Generation fallback",
                 "status": "complete",
                 "detail": (
-                    f"{GENERATION_MODEL} returned a transient {primary_error_type}; "
+                    f"{GENERATION_MODEL} returned {primary_error_signature}; "
                     f"retrying with {FALLBACK_GENERATION_MODEL}."
                 ),
                 "duration_ms": round((perf_counter() - generation_started) * 1000, 2),
@@ -189,8 +203,11 @@ Evidence:
         try:
             response = _generate(prompt, FALLBACK_GENERATION_MODEL)
         except Exception as fallback_exc:
+            fallback_signature = _error_signature(fallback_exc)
             raise RuntimeError(
-                f"gemini_generation_failed:{type(fallback_exc).__name__}"
+                "gemini_generation_failed:"
+                f"primary:{primary_error_signature};"
+                f"fallback:{fallback_signature}"
             ) from fallback_exc
 
     generation_ms = round((perf_counter() - generation_started) * 1000, 2)
@@ -240,7 +257,7 @@ Evidence:
         "generation_model_used": model_used,
         "fallback_model": FALLBACK_GENERATION_MODEL,
         "fallback_used": fallback_used,
-        "primary_error_type": primary_error_type,
+        "primary_error_signature": primary_error_signature,
         "generation_timeout_ms": GENERATION_TIMEOUT_MS,
         "total_duration_ms": round((perf_counter() - started) * 1000, 2),
     }
