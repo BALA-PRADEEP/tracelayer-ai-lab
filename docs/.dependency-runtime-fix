@@ -1,0 +1,1 @@
+Vercel Python dependency fix: keep pyproject.toml aligned with runtime imports.
