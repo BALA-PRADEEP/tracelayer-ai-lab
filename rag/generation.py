@@ -57,13 +57,12 @@ def _is_transient_generation_error(exc: Exception) -> bool:
 
 
 def _generate(prompt: str, model: str):
+    # Keep the request deliberately minimal. This matches Google's documented
+    # Gemini GenerateContent quickstart and avoids model-specific config fields
+    # causing INVALID_ARGUMENT responses in the deployed SDK/runtime.
     return get_generation_client().models.generate_content(
         model=model,
         contents=prompt,
-        config=types.GenerateContentConfig(
-            thinking_config=types.ThinkingConfig(thinking_level="low"),
-            max_output_tokens=500,
-        ),
     )
 
 
@@ -221,7 +220,7 @@ Evidence:
         {
             "step": "Generation completed",
             "status": "complete",
-            "detail": f"Generated grounded answer with {model_used} at low thinking level.",
+            "detail": f"Generated grounded answer with {model_used}.",
             "duration_ms": generation_ms,
         }
     )
