@@ -30,6 +30,15 @@ def to_json_safe(value):
     return value
 
 
+@app.get("/api")
+def api_root() -> dict[str, str]:
+    return {
+        "status": "ok",
+        "service": "tracelayer-api",
+        "message": "TraceLayer API is online.",
+    }
+
+
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {
