@@ -8,7 +8,10 @@ from google.genai import types
 from rag.retrieval import semantic_project_search
 
 GENERATION_MODEL = os.getenv("GEMINI_GENERATION_MODEL", "gemini-3.7-flash")
-GENERATION_TIMEOUT_MS = int(os.getenv("GEMINI_GENERATION_TIMEOUT_MS", "12000"))
+FALLBACK_GENERATION_MODEL = os.getenv(
+    "GEMINI_GENERATION_FALLBACK_MODEL", "gemini-3.6-flash"
+)
+GENERATION_TIMEOUT_MS = int(os.getenv("GEMINI_GENERATION_TIMEOUT_MS", "8000"))
 _generation_client = None
 
 
@@ -26,6 +29,30 @@ def get_generation_client():
             ),
         )
     return _generation_client
+
+
+def _is_transient_generation_error(exc: Exception) -> bool:
+    code = getattr(exc, "code", None)
+    if code in {408, 500, 502, 503, 504}:
+        return True
+    return type(exc).__name__ in {
+        "ServerError",
+        "TimeoutException",
+        "ReadTimeout",
+        "ConnectTimeout",
+        "ConnectError",
+    }
+
+
+def _generate(prompt: str, model: str):
+    return get_generation_client().models.generate_content(
+        model=model,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_level="low"),
+            max_output_tokens=500,
+        ),
+    )
 
 
 def _build_evidence(hits: list[dict]) -> tuple[str, list[dict]]:
@@ -101,6 +128,8 @@ def generate_grounded_answer(
             "execution": trace,
             "mode": "rag_grounded_answer",
             "generation_model": GENERATION_MODEL,
+            "generation_model_used": None,
+            "fallback_used": False,
             "total_duration_ms": round((perf_counter() - started) * 1000, 2),
         }
 
@@ -133,17 +162,37 @@ Evidence:
 """
 
     generation_started = perf_counter()
+    model_used = GENERATION_MODEL
+    fallback_used = False
+    primary_error_type = None
+
     try:
-        response = get_generation_client().models.generate_content(
-            model=GENERATION_MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                thinking_config=types.ThinkingConfig(thinking_level="low"),
-                max_output_tokens=500,
-            ),
-        )
+        response = _generate(prompt, GENERATION_MODEL)
     except Exception as exc:
-        raise RuntimeError(f"gemini_generation_failed:{type(exc).__name__}") from exc
+        primary_error_type = type(exc).__name__
+        if not _is_transient_generation_error(exc):
+            raise RuntimeError(f"gemini_generation_failed:{primary_error_type}") from exc
+
+        fallback_used = True
+        model_used = FALLBACK_GENERATION_MODEL
+        trace.append(
+            {
+                "step": "Generation fallback",
+                "status": "complete",
+                "detail": (
+                    f"{GENERATION_MODEL} returned a transient {primary_error_type}; "
+                    f"retrying with {FALLBACK_GENERATION_MODEL}."
+                ),
+                "duration_ms": round((perf_counter() - generation_started) * 1000, 2),
+            }
+        )
+        try:
+            response = _generate(prompt, FALLBACK_GENERATION_MODEL)
+        except Exception as fallback_exc:
+            raise RuntimeError(
+                f"gemini_generation_failed:{type(fallback_exc).__name__}"
+            ) from fallback_exc
+
     generation_ms = round((perf_counter() - generation_started) * 1000, 2)
 
     answer = (response.text or "").strip()
@@ -155,7 +204,7 @@ Evidence:
         {
             "step": "Generation completed",
             "status": "complete",
-            "detail": f"Generated grounded answer with {GENERATION_MODEL} at low thinking level.",
+            "detail": f"Generated grounded answer with {model_used} at low thinking level.",
             "duration_ms": generation_ms,
         }
     )
@@ -188,6 +237,10 @@ Evidence:
         "execution": trace,
         "mode": "rag_grounded_answer",
         "generation_model": GENERATION_MODEL,
+        "generation_model_used": model_used,
+        "fallback_model": FALLBACK_GENERATION_MODEL,
+        "fallback_used": fallback_used,
+        "primary_error_type": primary_error_type,
         "generation_timeout_ms": GENERATION_TIMEOUT_MS,
         "total_duration_ms": round((perf_counter() - started) * 1000, 2),
     }
