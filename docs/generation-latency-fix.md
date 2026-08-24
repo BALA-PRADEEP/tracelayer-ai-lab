@@ -1,0 +1,1 @@
+Bound Gemini request latency and use Gemini 3.7 Flash low-thinking configuration for the grounded RAG demo.
