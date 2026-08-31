@@ -7,9 +7,9 @@ from fastapi import FastAPI, HTTPException
 from psycopg.rows import dict_row
 
 app = FastAPI(
-    title="TraceLayer API",
+    title="BuildPilot API",
     version="0.3.0",
-    description="Backend foundation for the TraceLayer Production AI Engineering Lab.",
+    description="Backend services for the BuildPilot construction operations application.",
 )
 
 
@@ -34,8 +34,8 @@ def to_json_safe(value):
 def api_root() -> dict[str, str]:
     return {
         "status": "ok",
-        "service": "tracelayer-api",
-        "message": "TraceLayer API is online.",
+        "service": "buildpilot-api",
+        "message": "BuildPilot API is online.",
     }
 
 
@@ -43,7 +43,7 @@ def api_root() -> dict[str, str]:
 def health() -> dict[str, str]:
     return {
         "status": "ok",
-        "service": "tracelayer-api",
+        "service": "buildpilot-api",
         "version": "0.3.0",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
