@@ -76,23 +76,23 @@ export default function Home() {
   return (
     <main>
       <section className="hero shell">
-        <div className="eyebrow">Bala Pradeep R · AI Engineer</div>
-        <h1>Production AI systems you can inspect.</h1>
+        <div className="eyebrow">BuildPilot · Construction Operations</div>
+        <h1>Know where project costs are moving.</h1>
         <p className="lede">
-          TraceLayer is a production-minded AI engineering lab. Ask a realistic business question,
-          inspect the evidence, and see what the system did underneath.
+          Monitor project performance, investigate cost overruns, compare supplier pricing,
+          and make decisions with evidence from your operational data.
         </p>
 
         <div className="actions">
-          <a className="primary" href="#lab">Try the live system</a>
-          <a className="secondary" href="https://github.com/BALA-PRADEEP/tracelayer-ai-lab">View GitHub</a>
+          <a className="primary" href="#assistant">Analyze a project</a>
+          <a className="secondary" href="#operations">View operations</a>
         </div>
       </section>
 
-      <section className="shell lab" id="lab">
+      <section className="shell lab" id="assistant">
         <div className="sectionHeading">
-          <span>01 / Live system</span>
-          <h2>Ask about projects, costs, materials, and suppliers.</h2>
+          <span>Project intelligence</span>
+          <h2>Ask BuildPilot about costs, materials, and suppliers.</h2>
         </div>
 
         <div className="questionGrid">
@@ -106,7 +106,7 @@ export default function Home() {
             >
               <span>{question}</span>
               <span className="questionMeta" aria-hidden="true">
-                {index === 0 ? (loading ? "Running…" : "Run ↗") : "Next"}
+                {index === 0 ? (loading ? "Running…" : "Analyze ↗") : "Coming soon"}
               </span>
             </button>
           ))}
@@ -118,10 +118,10 @@ export default function Home() {
           <div className="answerCard" id="answer">
             <div className="answerTop">
               <div>
-                <span className="kicker">Grounded answer</span>
+                <span className="kicker">Project analysis</span>
                 <h3>{analysis.question}</h3>
               </div>
-              <span className="liveBadge">Live data</span>
+              <span className="liveBadge">Operational data</span>
             </div>
 
             <p className="answerText">{analysis.answer}</p>
@@ -135,7 +135,7 @@ export default function Home() {
 
             <div className="evidenceSection">
               <div className="evidenceHeading">
-                <span className="kicker">Evidence</span>
+                <span className="kicker">Supporting records</span>
                 <span>{analysis.reasons.length + analysis.expenses.length} records used</span>
               </div>
 
@@ -155,7 +155,7 @@ export default function Home() {
 
                 {analysis.expenses.map((expense) => (
                   <div className="evidenceCard" key={`${expense.description}-${expense.incurred_on}`}>
-                    <div className="evidenceTitle">Expense log</div>
+                    <div className="evidenceTitle">Expense record</div>
                     <p>{expense.description}</p>
                     <small>{expense.vendor_name} · {money(expense.amount)}</small>
                   </div>
@@ -165,7 +165,7 @@ export default function Home() {
 
             <div className="traceControl">
               <button className="traceButton" type="button" onClick={() => setShowTrace((value) => !value)}>
-                {showTrace ? "Hide execution" : "View execution"}
+                {showTrace ? "Hide analysis steps" : "View analysis steps"}
               </button>
               <span>{analysis.mode.replaceAll("_", " ")}</span>
             </div>
@@ -187,39 +187,38 @@ export default function Home() {
           </div>
         )}
 
-        <div className="terminalCard">
+        <div className="terminalCard" id="operations">
           <div className="terminalTop">
             <span className="statusDot" />
-            <span>TraceLayer / production</span>
-            <span className="muted">Vercel + FastAPI + Neon</span>
+            <span>BuildPilot / Operations</span>
+            <span className="muted">Project + supplier data</span>
           </div>
           <div className="terminalBody">
-            <p className="prompt">$ system.status</p>
-            <p>Frontend: live</p>
-            <p>FastAPI: live</p>
-            <p>Neon operational data: connected</p>
-            <p>Tenant-scoped deterministic analysis: live</p>
-            <p>Vector retrieval + LLM generation: next phase</p>
+            <p>Project data: connected</p>
+            <p>Cost analysis: active</p>
+            <p>Supplier pricing: connected</p>
+            <p>Evidence checks: active</p>
+            <p>Controlled actions: coming soon</p>
           </div>
         </div>
       </section>
 
       <section className="shell proof">
         <div>
-          <span className="kicker">GROUNDING</span>
-          <p>Answers are derived from inspectable tenant-scoped records.</p>
+          <span className="kicker">COST VISIBILITY</span>
+          <p>See estimate versus actual performance and the records behind each variance.</p>
         </div>
         <div>
-          <span className="kicker">TOOLS</span>
-          <p>Supplier pricing is kept separate from operational project data.</p>
+          <span className="kicker">MATERIAL INTELLIGENCE</span>
+          <p>Understand which materials, quantities, and unit costs are moving project margin.</p>
         </div>
         <div>
-          <span className="kicker">TRACE</span>
-          <p>Every visible execution step maps to work the backend actually performed.</p>
+          <span className="kicker">SUPPLIER OPTIONS</span>
+          <p>Compare current supplier pricing against project needs before deciding what to do next.</p>
         </div>
         <div>
-          <span className="kicker">RELIABILITY</span>
-          <p>No invented metrics, hidden evidence, or fake AI output.</p>
+          <span className="kicker">CONTROLLED ACTIONS</span>
+          <p>Keep recommendations evidence-backed and require approval before side effects are introduced.</p>
         </div>
       </section>
     </main>
