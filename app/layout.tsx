@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TraceLayer — Production AI systems you can inspect",
+  title: "BuildPilot — Construction operations intelligence",
   description:
-    "A production-minded AI engineering lab demonstrating retrieval, tool calls, evidence, reliability, and inspectable execution traces.",
+    "Monitor project costs, investigate overruns, compare supplier pricing, and make evidence-backed construction decisions.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
