@@ -1,59 +1,60 @@
-# TraceLayer AI Lab
+# BuildPilot
 
-Production AI systems you can inspect.
+Construction operations intelligence.
 
-TraceLayer is a hiring-focused, production-minded AI engineering lab built by Bala Pradeep R. It demonstrates how a modern AI system can combine operational data, retrieval, tool calls, evidence, reliability, and an inspectable execution trace.
+BuildPilot is a public, synthetic construction operations application that helps teams understand project cost movement, investigate overruns, compare supplier pricing, and make evidence-backed decisions.
 
-## Why this exists
+The application experience is intentionally product-first. Its AI, retrieval, tool-use, validation, and execution-trace capabilities sit underneath the workflow instead of defining the product surface.
 
-A resume can claim experience with RAG, ETL, integrations, security, and production debugging. TraceLayer makes those engineering ideas visible in a sanitized public system using synthetic construction data.
+## Core product experience
 
-## Target experience
+A user can:
 
-An employer can:
+1. Inspect project cost performance.
+2. Ask why a project is exceeding its estimate.
+3. Review the materials, expenses, and supplier records behind the variance.
+4. Compare supplier options.
+5. Receive recommendations grounded in operational evidence.
+6. Review the analysis steps used to reach the result.
+7. Later approve controlled procurement actions.
 
-1. Ask a realistic question about projects, costs, materials, or suppliers.
-2. Receive a grounded answer with evidence.
-3. Open **View execution** to inspect retrieval, structured queries, tool calls, validation, and latency.
-4. Explore architecture, trade-offs, failure handling, tests, and source code.
+## Product areas
 
-## MVP architecture
+- Overview
+- Projects
+- Cost insights
+- Materials
+- Suppliers
+- Procurement
+- Assistant
+
+## Application architecture
 
 ```text
-Employer
+User
    |
-Next.js UI
+Next.js application
    |
-FastAPI orchestrator
-   |-- PostgreSQL / Neon        (operational data)
-   |-- MongoDB Atlas            (AI-ready documents + vectors)
-   |-- Supplier tool            (sanitized external-service simulation)
-   `-- Gemini                   (grounded response generation)
+FastAPI orchestration layer
+   |-- PostgreSQL / Neon        operational data
+   |-- MongoDB Atlas            retrieval-oriented documents
+   |-- Supplier tools           pricing and availability
+   `-- LLM provider             grounded reasoning and response generation
 ```
 
-## MVP milestone
+## Current milestone
 
-The first public milestone is intentionally small:
+BuildPilot currently supports a live project cost-variance workflow backed by synthetic construction data. The next milestone is to evolve that flow into a bounded agent that can investigate a project dynamically, compare supplier options, recommend a mitigation, and prepare a controlled purchase request with approval.
 
-- Next.js portfolio shell
-- FastAPI health endpoint
-- one public Vercel deployment
-- synthetic PostgreSQL schema
-- PostgreSQL -> AI-document ETL
-- vector retrieval
-- one supplier tool
-- one grounded RAG question
-- evidence + execution trace
-- Playwright E2E coverage
+## Data and privacy guardrails
 
-## Principles
+- Synthetic public data only.
+- No employer source code, schemas, credentials, client information, or production records.
+- The private source database is used only as a reference for understanding realistic construction-domain relationships.
+- Public schemas and records are redesigned and generalized for BuildPilot.
+- Runtime metrics are measured, never invented.
+- Recommendations and AI answers must remain evidence-backed and inspectable.
 
-- Employer-first: every feature proves a skill worth hiring for.
-- Synthetic data only: no employer code, schemas, credentials, or client information.
-- Inspectable AI: evidence, trace, architecture, and tests are visible.
-- Production-minded: explicit failure states, retries, validation, and honest metrics.
-- Zero-cost V1: GitHub, Vercel, Neon, MongoDB Atlas, and Gemini free tiers.
+## Engineering visibility
 
-## Status
-
-Phase A — Foundation / Public MVP
+The primary experience should feel like a real application. Engineering proof remains available through source code, architecture documentation, validation behavior, failure handling, tests, and an optional analysis trace.
