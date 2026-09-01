@@ -9,6 +9,11 @@ def _service() -> ProjectService:
     return ProjectService()
 
 
+@PROJECT_API.get("/projects")
+def projects(tenant_slug: str = "stark-roofing"):
+    return _service().list_projects(tenant_slug)
+
+
 @PROJECT_API.get("/over-budget")
 def over_budget_projects(tenant_slug: str = "stark-roofing"):
     return _service().get_over_budget_projects(tenant_slug)
@@ -20,6 +25,19 @@ def project_detail(project_name: str, tenant_slug: str = "stark-roofing"):
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found.")
     return project
+
+
+@PROJECT_API.get("/projects/{project_name}/analysis")
+def project_analysis(project_name: str, tenant_slug: str = "stark-roofing"):
+    result = _service().analyze_project_costs(tenant_slug, project_name)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    return result
+
+
+@PROJECT_API.get("/suppliers/{sku}")
+def supplier_options(sku: str):
+    return _service().get_supplier_options(sku)
 
 
 @PROJECT_API.get("/cedar-analysis")
