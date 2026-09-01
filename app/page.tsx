@@ -1,44 +1,6 @@
 "use client";
 
-import { useState } from "react";
-
-const demoQuestions = [
-  "Why did Project Cedar exceed its material budget?",
-  "Find similar roofing projects and compare their costs.",
-  "Check current supplier prices for Project Cedar.",
-];
-
-type AnalysisResponse = {
-  question: string;
-  answer: string;
-  summary: {
-    estimated_total: number;
-    actual_total: number;
-    variance: number;
-    variance_percent: number;
-    material_budget: number;
-  };
-  reasons: Array<{
-    material: string;
-    variance: number;
-    quantity_delta: number;
-    unit_cost_delta: number;
-    current_supplier_price: number | null;
-    uom: string;
-  }>;
-  expenses: Array<{
-    description: string;
-    amount: number;
-    vendor_name: string;
-    incurred_on: string;
-  }>;
-  execution: Array<{
-    step: string;
-    status: string;
-    detail: string;
-  }>;
-  mode: string;
-};
+import { useMemo, useState } from "react";
 
 const money = (value: number) =>
   new Intl.NumberFormat("en-US", {
@@ -47,180 +9,223 @@ const money = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value);
 
+type Project = {
+  name: string;
+  customer: string;
+  status: string;
+  estimate: number;
+  actual: number;
+  margin: number;
+  risk: "Healthy" | "Watch" | "At risk";
+};
+
+const projects: Project[] = [
+  { name: "Project Cedar", customer: "Stark Roofing", status: "In progress", estimate: 82000, actual: 91700, margin: 14, risk: "At risk" },
+  { name: "Project Atlas", customer: "Summit Construction", status: "In progress", estimate: 120000, actual: 118400, margin: 22, risk: "Healthy" },
+  { name: "Project Falcon", customer: "Acme Homes", status: "Planning", estimate: 64000, actual: 0, margin: 27, risk: "Watch" },
+  { name: "Project Summit", customer: "Northfield Builders", status: "In progress", estimate: 97000, actual: 88400, margin: 24, risk: "Healthy" },
+];
+
+const nav = ["Overview", "Customers", "Estimates", "Projects", "Procurement", "Finance"];
+
 export default function Home() {
-  const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showTrace, setShowTrace] = useState(false);
+  const [active, setActive] = useState("Overview");
+  const [selectedProject, setSelectedProject] = useState<Project>(projects[0]);
+  const [agentOpen, setAgentOpen] = useState(false);
 
-  async function runCedarAnalysis() {
-    setLoading(true);
-    setError(null);
-    setShowTrace(false);
-
-    try {
-      const response = await fetch("/api/demo/cedar-analysis", { cache: "no-store" });
-      if (!response.ok) throw new Error(`Analysis request failed (${response.status})`);
-      const data = (await response.json()) as AnalysisResponse;
-      setAnalysis(data);
-      requestAnimationFrame(() => {
-        document.getElementById("answer")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Unable to run analysis.");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const totals = useMemo(() => {
+    const activeProjects = projects.filter((project) => project.status === "In progress").length;
+    const atRisk = projects.filter((project) => project.risk === "At risk").length;
+    const estimate = projects.reduce((sum, project) => sum + project.estimate, 0);
+    const actual = projects.reduce((sum, project) => sum + project.actual, 0);
+    return { activeProjects, atRisk, estimate, actual };
+  }, []);
 
   return (
-    <main>
-      <section className="hero shell">
-        <div className="eyebrow">BuildPilot · Construction Operations</div>
-        <h1>Know where project costs are moving.</h1>
-        <p className="lede">
-          Monitor project performance, investigate cost overruns, compare supplier pricing,
-          and make decisions with evidence from your operational data.
-        </p>
-
-        <div className="actions">
-          <a className="primary" href="#assistant">Analyze a project</a>
-          <a className="secondary" href="#operations">View operations</a>
-        </div>
-      </section>
-
-      <section className="shell lab" id="assistant">
-        <div className="sectionHeading">
-          <span>Project intelligence</span>
-          <h2>Ask BuildPilot about costs, materials, and suppliers.</h2>
+    <main className="appShell">
+      <aside className="sidebar">
+        <div className="brandBlock">
+          <div className="brandMark">B</div>
+          <div>
+            <strong>BuildPilot</strong>
+            <span>Construction operations</span>
+          </div>
         </div>
 
-        <div className="questionGrid">
-          {demoQuestions.map((question, index) => (
+        <nav className="sideNav" aria-label="Primary">
+          {nav.map((item) => (
             <button
-              className={`questionCard ${index === 0 ? "questionCardActive" : "questionCardMuted"}`}
-              key={question}
+              key={item}
+              className={active === item ? "navItem navItemActive" : "navItem"}
               type="button"
-              onClick={index === 0 ? runCedarAnalysis : undefined}
-              disabled={index !== 0 || loading}
+              onClick={() => setActive(item)}
             >
-              <span>{question}</span>
-              <span className="questionMeta" aria-hidden="true">
-                {index === 0 ? (loading ? "Running…" : "Analyze ↗") : "Coming soon"}
-              </span>
+              {item}
             </button>
           ))}
+        </nav>
+
+        <div className="sidebarFooter">
+          <div className="userAvatar">BP</div>
+          <div>
+            <strong>Bala Pradeep</strong>
+            <span>Project manager</span>
+          </div>
         </div>
+      </aside>
 
-        {error && <div className="errorCard">{error}</div>}
-
-        {analysis && (
-          <div className="answerCard" id="answer">
-            <div className="answerTop">
-              <div>
-                <span className="kicker">Project analysis</span>
-                <h3>{analysis.question}</h3>
-              </div>
-              <span className="liveBadge">Operational data</span>
-            </div>
-
-            <p className="answerText">{analysis.answer}</p>
-
-            <div className="metricGrid">
-              <div><span>Estimate</span><strong>{money(analysis.summary.estimated_total)}</strong></div>
-              <div><span>Actual</span><strong>{money(analysis.summary.actual_total)}</strong></div>
-              <div><span>Variance</span><strong>{money(analysis.summary.variance)}</strong></div>
-              <div><span>Over estimate</span><strong>{analysis.summary.variance_percent.toFixed(2)}%</strong></div>
-            </div>
-
-            <div className="evidenceSection">
-              <div className="evidenceHeading">
-                <span className="kicker">Supporting records</span>
-                <span>{analysis.reasons.length + analysis.expenses.length} records used</span>
-              </div>
-
-              <div className="evidenceGrid">
-                {analysis.reasons.map((reason) => (
-                  <div className="evidenceCard" key={reason.material}>
-                    <div className="evidenceTitle">{reason.material}</div>
-                    <p>{money(reason.variance)} material variance</p>
-                    <small>
-                      Qty +{reason.quantity_delta} {reason.uom} · Unit cost +${reason.unit_cost_delta.toFixed(2)}
-                    </small>
-                    {reason.current_supplier_price !== null && (
-                      <small>Current supplier price: ${reason.current_supplier_price.toFixed(2)} / {reason.uom}</small>
-                    )}
-                  </div>
-                ))}
-
-                {analysis.expenses.map((expense) => (
-                  <div className="evidenceCard" key={`${expense.description}-${expense.incurred_on}`}>
-                    <div className="evidenceTitle">Expense record</div>
-                    <p>{expense.description}</p>
-                    <small>{expense.vendor_name} · {money(expense.amount)}</small>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="traceControl">
-              <button className="traceButton" type="button" onClick={() => setShowTrace((value) => !value)}>
-                {showTrace ? "Hide analysis steps" : "View analysis steps"}
-              </button>
-              <span>{analysis.mode.replaceAll("_", " ")}</span>
-            </div>
-
-            {showTrace && (
-              <div className="tracePanel">
-                {analysis.execution.map((item, index) => (
-                  <div className="traceRow" key={item.step}>
-                    <span className="traceIndex">{String(index + 1).padStart(2, "0")}</span>
-                    <div>
-                      <strong>{item.step}</strong>
-                      <p>{item.detail}</p>
-                    </div>
-                    <span className="traceStatus">✓</span>
-                  </div>
-                ))}
-              </div>
-            )}
+      <section className="workspace">
+        <header className="topbar">
+          <div>
+            <span className="breadcrumb">Workspace / {active}</span>
+            <h1>{active}</h1>
           </div>
-        )}
+          <div className="topbarActions">
+            <button className="ghostButton" type="button">Search</button>
+            <button className="primaryButton" type="button">Create</button>
+          </div>
+        </header>
 
-        <div className="terminalCard" id="operations">
-          <div className="terminalTop">
-            <span className="statusDot" />
-            <span>BuildPilot / Operations</span>
-            <span className="muted">Project + supplier data</span>
-          </div>
-          <div className="terminalBody">
-            <p>Project data: connected</p>
-            <p>Cost analysis: active</p>
-            <p>Supplier pricing: connected</p>
-            <p>Evidence checks: active</p>
-            <p>Controlled actions: coming soon</p>
-          </div>
+        <div className="contentWrap">
+          {active === "Overview" && (
+            <>
+              <section className="welcomeRow">
+                <div>
+                  <p className="eyebrow">Today</p>
+                  <h2>Here is what needs your attention.</h2>
+                  <p className="subcopy">Track live project performance and act before cost issues become margin problems.</p>
+                </div>
+                <div className="healthPill">3 projects on track</div>
+              </section>
+
+              <section className="metricCards" aria-label="Business summary">
+                <article className="metricCard"><span>Active projects</span><strong>{totals.activeProjects}</strong><small>Across current jobs</small></article>
+                <article className="metricCard"><span>Projects at risk</span><strong>{totals.atRisk}</strong><small>Requires attention</small></article>
+                <article className="metricCard"><span>Estimated value</span><strong>{money(totals.estimate)}</strong><small>Across visible projects</small></article>
+                <article className="metricCard"><span>Actual cost</span><strong>{money(totals.actual)}</strong><small>Current recorded spend</small></article>
+              </section>
+
+              <section className="attentionCard">
+                <div className="attentionTop">
+                  <div>
+                    <span className="sectionLabel">Needs attention</span>
+                    <h3>Project Cedar is over its planned cost.</h3>
+                  </div>
+                  <span className="riskBadge">At risk</span>
+                </div>
+                <div className="attentionGrid">
+                  <div><span>Estimate</span><strong>{money(projects[0].estimate)}</strong></div>
+                  <div><span>Actual</span><strong>{money(projects[0].actual)}</strong></div>
+                  <div><span>Variance</span><strong>+{money(projects[0].actual - projects[0].estimate)}</strong></div>
+                  <div><span>Current margin</span><strong>{projects[0].margin}%</strong></div>
+                </div>
+                <div className="attentionActions">
+                  <button className="primaryButton" type="button" onClick={() => { setSelectedProject(projects[0]); setAgentOpen(true); }}>Investigate</button>
+                  <button className="ghostButton" type="button" onClick={() => { setActive("Projects"); setSelectedProject(projects[0]); }}>Open project</button>
+                </div>
+              </section>
+
+              <section className="tableCard">
+                <div className="sectionHeader">
+                  <div>
+                    <span className="sectionLabel">Projects</span>
+                    <h3>Current work</h3>
+                  </div>
+                  <button className="textButton" type="button" onClick={() => setActive("Projects")}>View all projects</button>
+                </div>
+                <div className="projectTable" role="table">
+                  <div className="projectRow projectHeader" role="row">
+                    <span>Project</span><span>Customer</span><span>Status</span><span>Estimate</span><span>Actual</span><span>Margin</span><span>Health</span>
+                  </div>
+                  {projects.map((project) => (
+                    <button className="projectRow projectButton" key={project.name} type="button" onClick={() => { setSelectedProject(project); setActive("Projects"); }}>
+                      <strong>{project.name}</strong><span>{project.customer}</span><span>{project.status}</span><span>{money(project.estimate)}</span><span>{project.actual ? money(project.actual) : "—"}</span><span>{project.margin}%</span><span className={`healthTag ${project.risk === "At risk" ? "danger" : project.risk === "Watch" ? "warning" : "success"}`}>{project.risk}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
+
+          {active === "Projects" && (
+            <section className="projectWorkspace">
+              <div className="projectTitleRow">
+                <div>
+                  <span className="sectionLabel">{selectedProject.customer}</span>
+                  <h2>{selectedProject.name}</h2>
+                  <p className="subcopy">Everything needed to understand and run this project in one place.</p>
+                </div>
+                <button className="primaryButton" type="button" onClick={() => setAgentOpen(true)}>Investigate project</button>
+              </div>
+
+              <div className="projectTabs">
+                {['Overview','Estimate','Schedule','Materials','Purchase orders','Costs','Notes'].map((tab, index) => <button type="button" className={index === 0 ? "projectTab projectTabActive" : "projectTab"} key={tab}>{tab}</button>)}
+              </div>
+
+              <div className="projectSummaryGrid">
+                <article><span>Project status</span><strong>{selectedProject.status}</strong></article>
+                <article><span>Estimate</span><strong>{money(selectedProject.estimate)}</strong></article>
+                <article><span>Actual cost</span><strong>{selectedProject.actual ? money(selectedProject.actual) : "Not started"}</strong></article>
+                <article><span>Margin</span><strong>{selectedProject.margin}%</strong></article>
+              </div>
+
+              <div className="projectColumns">
+                <section className="detailCard">
+                  <div className="sectionHeader"><div><span className="sectionLabel">Cost performance</span><h3>Estimate vs actual</h3></div></div>
+                  <div className="costBars">
+                    <div><span>Materials</span><strong>$42,000</strong><em>$51,700 actual</em></div>
+                    <div><span>Labour</span><strong>$21,500</strong><em>$20,900 actual</em></div>
+                    <div><span>Equipment</span><strong>$6,400</strong><em>$6,150 actual</em></div>
+                  </div>
+                </section>
+                <section className="detailCard">
+                  <div className="sectionHeader"><div><span className="sectionLabel">Next actions</span><h3>Keep the job moving</h3></div></div>
+                  <div className="actionList">
+                    <button type="button">Review material variance <span>→</span></button>
+                    <button type="button">Compare supplier pricing <span>→</span></button>
+                    <button type="button">Review open purchase orders <span>→</span></button>
+                    <button type="button">Check project notes <span>→</span></button>
+                  </div>
+                </section>
+              </div>
+            </section>
+          )}
+
+          {!['Overview','Projects'].includes(active) && (
+            <section className="emptyModule">
+              <span className="sectionLabel">BuildPilot workspace</span>
+              <h2>{active}</h2>
+              <p>This module is part of the application flow and will be built next around the construction workflow.</p>
+            </section>
+          )}
         </div>
       </section>
 
-      <section className="shell proof">
-        <div>
-          <span className="kicker">COST VISIBILITY</span>
-          <p>See estimate versus actual performance and the records behind each variance.</p>
-        </div>
-        <div>
-          <span className="kicker">MATERIAL INTELLIGENCE</span>
-          <p>Understand which materials, quantities, and unit costs are moving project margin.</p>
-        </div>
-        <div>
-          <span className="kicker">SUPPLIER OPTIONS</span>
-          <p>Compare current supplier pricing against project needs before deciding what to do next.</p>
-        </div>
-        <div>
-          <span className="kicker">CONTROLLED ACTIONS</span>
-          <p>Keep recommendations evidence-backed and require approval before side effects are introduced.</p>
-        </div>
-      </section>
+      {agentOpen && (
+        <aside className="agentPanel" aria-label="BuildPilot investigation">
+          <div className="agentHeader">
+            <div><span className="sectionLabel">BuildPilot assistant</span><h3>Investigating {selectedProject.name}</h3></div>
+            <button className="iconButton" type="button" onClick={() => setAgentOpen(false)}>×</button>
+          </div>
+          <div className="agentBody">
+            <div className="agentPrompt">Why is this project going over budget?</div>
+            <div className="agentAnswer">
+              <span className="agentStatus">Analysis ready</span>
+              <p>Material spend is the main pressure point. Shingle quantity and unit cost increased, while additional underlayment was added after scope changed.</p>
+              <div className="agentFinding"><span>Material variance</span><strong>+$9,700</strong></div>
+              <div className="agentFinding"><span>Largest driver</span><strong>Shingles</strong></div>
+            </div>
+            <div className="agentActions">
+              <button className="primaryButton" type="button">Find lower-cost suppliers</button>
+              <button className="ghostButton" type="button">Show supporting records</button>
+            </div>
+          </div>
+          <div className="agentComposer">
+            <input aria-label="Ask BuildPilot" placeholder="Ask about this project…" />
+            <button className="primaryButton" type="button">Send</button>
+          </div>
+        </aside>
+      )}
     </main>
   );
 }
