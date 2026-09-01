@@ -1,8 +1,15 @@
+from pathlib import Path
+import sys
+
 from fastapi import FastAPI, HTTPException, Query
 
-from rag.generation import generate_grounded_answer
+BACKEND_ROOT = Path(__file__).resolve().parents[2] / "src" / "backend-service"
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
 
-app = FastAPI(title="TraceLayer Grounded RAG API", version="0.5.0")
+from backend_service.source.rag.generation import generate_grounded_answer
+
+app = FastAPI(title="BuildPilot Grounded RAG API", version="0.5.0")
 
 
 @app.get("/api/demo/rag-answer")
@@ -12,11 +19,7 @@ def rag_answer(
     limit: int = Query(3, ge=1, le=5),
 ):
     try:
-        return generate_grounded_answer(
-            q,
-            tenant_slug=tenant_slug,
-            limit=limit,
-        )
+        return generate_grounded_answer(q, tenant_slug=tenant_slug, limit=limit)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:

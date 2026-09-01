@@ -1,9 +1,12 @@
-"""Vercel entrypoint for the BuildPilot Python backend.
+"""Thin Vercel entrypoint for the BuildPilot Python backend."""
 
-Application code lives under backend/source using the same layered shape as the
-GMS external-services application. Keep deployment adapters thin.
-"""
+from pathlib import Path
+import sys
 
-from backend.main import app
+BACKEND_ROOT = Path(__file__).resolve().parents[1] / "src" / "backend-service"
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+
+from backend_service.main import app
 
 __all__ = ["app"]

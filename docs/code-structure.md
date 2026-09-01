@@ -1,62 +1,66 @@
 # BuildPilot code structure
 
-BuildPilot follows two proven organizational patterns from the supplied GMS Cloud source while remaining an independent implementation.
-
-## Backend
-
-The Python backend follows the shape of `gmscloud-external-services`:
+BuildPilot is organized under a single `src/` boundary with two clear application areas: the user-facing web application and the Python backend service.
 
 ```text
-backend/
-  main.py
-  source/
-    api/        # FastAPI routers and request/response boundary
-    service/    # business workflows and orchestration
-    dal/        # repositories, database sessions, persistence models
-    dao/        # shared data-access behavior such as retries
-    Utils/      # cross-cutting helpers
-    agent/      # agent orchestration; added behind services
-    tools/      # safe agent tools that call service methods
-    tests/      # backend tests
-
-api/            # thin Vercel deployment entrypoints only
-```
-
-Rules:
-- Python only for backend code.
-- API handlers do not contain SQL or business workflows.
-- Services own business behavior.
-- Repositories own database access.
-- Agent tools call services; agents never query PostgreSQL directly.
-- Deployment-specific files stay thin.
-
-## Frontend
-
-The frontend adapts the organizational ideas in `gmscloud-tenant-web` to Next.js instead of copying its CRA/router setup:
-
-```text
-app/            # Next.js routes and root layout only
 src/
-  components/   # reusable UI grouped by product area
-  pages/        # page/workspace compositions
-  services/     # HTTP/API clients
-  hooks/        # reusable React hooks
-  contexts/     # shared application context
-  store/        # client state when needed
-  constants/    # navigation, feature constants
-  data/         # temporary mock/demo data only
-  interfaces/   # TypeScript domain contracts
-  utils/        # formatting and small helpers
-  styles/       # feature/shared styles as the UI grows
+  web-ui/
+    application/     # page/workspace compositions
+    components/      # reusable UI grouped by product area
+    services/        # HTTP/API clients
+    interfaces/      # TypeScript domain contracts
+    constants/       # navigation and UI constants
+    data/            # temporary synthetic/demo data
+    utils/           # UI formatting helpers
+    styles/          # shared/global styles
+
+  backend-service/
+    backend_service/ # importable Python package
+      main.py
+      source/
+        api/          # FastAPI routers and HTTP boundary
+        service/      # business workflows and orchestration
+        dal/          # ALL database/persistence concerns
+          database/   # schema and seed assets
+          db_session.py
+          base_dao.py
+          ProjectRepository.py
+          vector_retrieval.py
+          embed_project_documents.py
+          sync_neon_to_mongo.py
+        rag/          # grounded generation logic; retrieval stays in DAL
+        agent/        # agent orchestration
+        tools/        # safe tools that call services
+        Utils/        # cross-cutting backend helpers
+        tests/        # backend tests
 ```
 
+## Database boundary
+
+Anything that directly talks to PostgreSQL, Neon, MongoDB, database sessions, repositories, persistence schemas, seed data, database retries, embeddings stored in a database, or synchronization between databases belongs under `src/backend-service/backend_service/source/dal/`.
+
 Rules:
-- `app/` stays thin; product UI belongs in `src/`.
-- Pages compose components; they do not become giant all-in-one files.
-- Network requests live in `services/`, not React components.
-- Domain types live in `interfaces/`.
-- Components are grouped by user-facing product area, not technical implementation detail.
+- API handlers never contain SQL.
+- Services never open database connections directly.
+- Agent code never queries a database directly.
+- Agent tools call application services.
+- Services call DAL repositories/adapters.
+- Database migrations/schema/seed assets live inside DAL.
+- External API clients that do not persist/query data may live outside DAL in a dedicated integration layer when introduced.
 
-## Reference boundary
+## Frontend boundary
 
-The GMS source is used only to understand application structure and business flow. BuildPilot remains an independently designed product. The restored tn9 database is private reference/source data and is not exposed directly through the public application.
+All product UI code belongs under `src/web-ui/`. Next.js `app/` remains only as the framework routing/bootstrap layer and imports the real UI from `src/web-ui/`.
+
+Rules:
+- Product screens are composed under `web-ui/application`.
+- Reusable UI lives under `web-ui/components`.
+- Network requests live under `web-ui/services`.
+- Domain interfaces live under `web-ui/interfaces`.
+- React components do not contain backend/database logic.
+
+## Deployment adapters
+
+The root `app/` and `api/` folders remain intentionally thin because Next.js and Vercel use them as deployment/routing entrypoints. They are not product implementation folders.
+
+The backend remains Python only. The GMS source is used only to understand structure and business flow; BuildPilot remains an independent implementation.

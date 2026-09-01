@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from backend.source.dal.ProjectRepository import ProjectRepository
+from backend_service.source.dal.ProjectRepository import ProjectRepository
 
 
 class ProjectService:

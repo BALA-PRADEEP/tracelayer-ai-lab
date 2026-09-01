@@ -1,6 +1,6 @@
-from backend.source.dao.baseDao import with_retry
-from backend.source.dal.db_session import database_session
-from backend.source.Utils.serialization import to_json_safe
+from backend_service.source.dal.base_dao import with_retry
+from backend_service.source.dal.db_session import database_session
+from backend_service.source.Utils.serialization import to_json_safe
 
 
 class ProjectRepository:

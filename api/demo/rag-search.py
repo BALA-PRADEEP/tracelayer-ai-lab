@@ -1,8 +1,15 @@
+from pathlib import Path
+import sys
+
 from fastapi import FastAPI, HTTPException, Query
 
-from rag.retrieval import semantic_project_search
+BACKEND_ROOT = Path(__file__).resolve().parents[2] / "src" / "backend-service"
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
 
-app = FastAPI(title="TraceLayer Vector Retrieval API", version="0.4.1")
+from backend_service.source.dal.vector_retrieval import semantic_project_search
+
+app = FastAPI(title="BuildPilot Vector Retrieval API", version="0.4.1")
 
 
 @app.get("/api/demo/rag-search")
@@ -12,11 +19,7 @@ def rag_search(
     limit: int = Query(3, ge=1, le=5),
 ):
     try:
-        hits, embedded_count = semantic_project_search(
-            q,
-            tenant_slug=tenant_slug,
-            limit=limit,
-        )
+        hits, embedded_count = semantic_project_search(q, tenant_slug=tenant_slug, limit=limit)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
@@ -30,8 +33,7 @@ def rag_search(
         "bootstrap": {
             "documents_embedded": embedded_count,
             "note": (
-                "Missing synthetic demo embeddings were created on this request. "
-                "If results are still warming, retry once after a few seconds."
+                "Missing synthetic demo embeddings were created on this request. Retry once if results are still warming."
                 if embedded_count
                 else "Demo document embeddings were already current."
             ),
