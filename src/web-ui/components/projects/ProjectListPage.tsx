@@ -11,15 +11,16 @@ interface ProjectListPageProps {
 
 export default function ProjectListPage({ projects, onOpen }: ProjectListPageProps) {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"All" | "Active" | "At risk" | "Planning">("All");
+  const [filter, setFilter] = useState<"All" | "Active" | "At risk" | "Completed">("All");
 
   const visibleProjects = useMemo(() => {
     return projects.filter((project) => {
-      const matchesQuery = `${project.name} ${project.customer}`.toLowerCase().includes(query.toLowerCase());
+      const matchesQuery = `${project.name} ${project.customer} ${project.projectType} ${project.city ?? ""} ${project.state ?? ""}`.toLowerCase().includes(query.toLowerCase());
+      const status = project.status.toLowerCase();
       const matchesFilter = filter === "All"
-        || (filter === "Active" && project.status === "In progress")
+        || (filter === "Active" && ["active", "in progress"].includes(status))
         || (filter === "At risk" && project.risk === "At risk")
-        || (filter === "Planning" && project.status === "Planning");
+        || (filter === "Completed" && status === "completed");
       return matchesQuery && matchesFilter;
     });
   }, [filter, projects, query]);
@@ -32,7 +33,6 @@ export default function ProjectListPage({ projects, onOpen }: ProjectListPagePro
           <h2>Projects</h2>
           <p>Find a job, check its health, and move directly into the work that needs attention.</p>
         </div>
-        <button className="primaryButton" type="button">+ New project</button>
       </section>
 
       <section className="contentSection">
@@ -42,7 +42,7 @@ export default function ProjectListPage({ projects, onOpen }: ProjectListPagePro
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search projects or customers" />
           </label>
           <div className="filterTabs" aria-label="Project filters">
-            {(["All", "Active", "At risk", "Planning"] as const).map((item) => (
+            {(["All", "Active", "At risk", "Completed"] as const).map((item) => (
               <button key={item} type="button" className={filter === item ? "filterTab filterTabActive" : "filterTab"} onClick={() => setFilter(item)}>
                 {item}
               </button>
