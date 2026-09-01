@@ -1,17 +1,47 @@
 "use client";
 
-import { useState } from "react";
-import type { Project } from "../../interfaces/project";
+import { useEffect, useState } from "react";
+import type { Project, SupplierOption } from "../../interfaces/project";
+import { getProjectAnalysis, getSupplierOptions, type ProjectAnalysisResponse } from "../../services/ProjectService";
+import { money } from "../../utils/currency";
 
 interface AssistantPanelProps {
   project: Project;
   onClose: () => void;
 }
 
-type AgentView = "analysis" | "suppliers" | "purchase" | "success";
+type AgentView = "analysis" | "suppliers";
 
 export default function AssistantPanel({ project, onClose }: AssistantPanelProps) {
   const [view, setView] = useState<AgentView>("analysis");
+  const [analysis, setAnalysis] = useState<ProjectAnalysisResponse | null>(null);
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [supplierLoading, setSupplierLoading] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    setError(false);
+    getProjectAnalysis(project.name)
+      .then((result) => mounted && setAnalysis(result))
+      .catch(() => mounted && setError(true))
+      .finally(() => mounted && setLoading(false));
+    return () => { mounted = false; };
+  }, [project.name]);
+
+  const compareSuppliers = async () => {
+    const sku = analysis?.reasons[0]?.sku;
+    if (!sku) return;
+    setSupplierLoading(true);
+    try {
+      setSuppliers(await getSupplierOptions(sku));
+      setView("suppliers");
+    } finally {
+      setSupplierLoading(false);
+    }
+  };
 
   return (
     <>
@@ -20,42 +50,64 @@ export default function AssistantPanel({ project, onClose }: AssistantPanelProps
         <div className="agentHeader">
           <div>
             <span className="sectionKicker">BuildPilot</span>
-            <h3>{view === "analysis" ? `Investigating ${project.name}` : view === "suppliers" ? "Compare suppliers" : view === "purchase" ? "Review purchase order" : "Purchase order created"}</h3>
+            <h3>{view === "analysis" ? `Investigating ${project.name}` : "Compare suppliers"}</h3>
           </div>
           <button className="iconButton" type="button" onClick={onClose} aria-label="Close assistant">×</button>
         </div>
 
         <div className="agentBody">
-          {view === "analysis" && (
+          {view === "analysis" && loading && (
+            <div className="agentProgress" aria-live="polite">
+              <div><span className="progressCheck">•</span><span>Loading project budget</span></div>
+              <div><span className="progressCheck">•</span><span>Checking material usage</span></div>
+              <div><span className="progressCheck">•</span><span>Reviewing recorded expenses</span></div>
+            </div>
+          )}
+
+          {view === "analysis" && error && (
+            <section className="agentResult" role="alert">
+              <span className="statusText dangerText">Analysis unavailable</span>
+              <h4>I couldn't load enough project data to investigate this job.</h4>
+              <p>Close this panel and try again after the project data is available.</p>
+            </section>
+          )}
+
+          {view === "analysis" && analysis && !loading && (
             <>
-              <div className="agentQuestion">Why is this project going over budget?</div>
+              <div className="agentQuestion">Why is this project outside its estimate?</div>
               <div className="agentProgress" aria-label="Investigation completed">
-                <div><span className="progressCheck">✓</span><span>Reviewed project budget</span></div>
-                <div><span className="progressCheck">✓</span><span>Checked material usage</span></div>
-                <div><span className="progressCheck">✓</span><span>Reviewed purchase records</span></div>
-                <div><span className="progressCheck">✓</span><span>Checked supplier pricing</span></div>
+                {analysis.execution.map((step) => <div key={step.step}><span className="progressCheck">✓</span><span>{step.step}</span></div>)}
               </div>
 
               <section className="agentResult">
                 <span className="statusText successText">Analysis complete</span>
-                <h4>Material costs are driving the overrun.</h4>
-                <p>Your material plan was $42,000. Recorded spend is $51,700, putting the project $9,700 above plan.</p>
-                <div className="agentMetric"><span>Material variance</span><strong>+$9,700</strong></div>
+                <h4>{analysis.summary.variance > 0 ? "Recorded costs are above the project estimate." : "Recorded costs are within the project estimate."}</h4>
+                <p>{analysis.answer}</p>
+                <div className="agentMetric"><span>Project variance</span><strong>{analysis.summary.variance > 0 ? "+" : ""}{money(Number(analysis.summary.variance))}</strong></div>
+                <div className="agentMetric"><span>Material variance</span><strong>{analysis.summary.material_variance > 0 ? "+" : ""}{money(Number(analysis.summary.material_variance))}</strong></div>
               </section>
 
-              <section className="agentReasons">
-                <div className="sectionHeadingRow"><div><span className="sectionKicker">What's driving it</span></div></div>
-                <div className="reasonRow"><span className="reasonNumber">1</span><div><strong>Architectural shingles</strong><small>Higher quantity and unit price</small></div><b>+$7,200</b></div>
-                <div className="reasonRow"><span className="reasonNumber">2</span><div><strong>Underlayment</strong><small>Additional material recorded</small></div><b>+$900</b></div>
-                <div className="reasonRow"><span className="reasonNumber">3</span><div><strong>Drip edge</strong><small>Usage above original plan</small></div><b>+$650</b></div>
-              </section>
+              {analysis.reasons.length > 0 && (
+                <section className="agentReasons">
+                  <div className="sectionHeadingRow"><div><span className="sectionKicker">What's driving it</span></div></div>
+                  {analysis.reasons.map((reason, index) => (
+                    <div className="reasonRow" key={reason.sku}>
+                      <span className="reasonNumber">{index + 1}</span>
+                      <div><strong>{reason.material}</strong><small>{reason.quantity_delta > 0 ? `${reason.quantity_delta} ${reason.uom} above planned quantity` : "Quantity within plan"}</small></div>
+                      <b className={reason.variance > 0 ? "dangerText" : "successText"}>{reason.variance > 0 ? "+" : ""}{money(Number(reason.variance))}</b>
+                    </div>
+                  ))}
+                </section>
+              )}
 
-              <section className="recommendationCard">
-                <span className="sectionKicker">Recommended next step</span>
-                <h4>Compare suppliers for the remaining shingles</h4>
-                <p>There are 32 SQ remaining. Another vendor may reduce the projected cost without extending lead time.</p>
-                <button className="primaryButton fullButton" type="button" onClick={() => setView("suppliers")}>Compare suppliers</button>
-              </section>
+              {analysis.reasons[0] && (
+                <section className="recommendationCard">
+                  <span className="sectionKicker">Next check</span>
+                  <h4>Compare current supplier prices for {analysis.reasons[0].material}</h4>
+                  <p>Supplier options come from the latest supplier-price records stored in the application database.</p>
+                  <button className="primaryButton fullButton" type="button" disabled={supplierLoading} onClick={() => void compareSuppliers()}>{supplierLoading ? "Loading suppliers…" : "Compare suppliers"}</button>
+                </section>
+              )}
             </>
           )}
 
@@ -63,52 +115,29 @@ export default function AssistantPanel({ project, onClose }: AssistantPanelProps
             <>
               <button className="backButton" type="button" onClick={() => setView("analysis")}>← Back to analysis</button>
               <div className="supplierContext">
-                <span>Architectural shingles</span>
-                <strong>32 SQ needed</strong>
+                <span>{analysis?.reasons[0]?.material}</span>
+                <strong>{suppliers.length} current supplier {suppliers.length === 1 ? "option" : "options"}</strong>
               </div>
-              <div className="supplierCards">
-                <article><div className="supplierTitle"><strong>ABC Supply</strong><span className="currentBadge">Current</span></div><dl><div><dt>Price / SQ</dt><dd>$94</dd></div><div><dt>Available</dt><dd>50 SQ</dd></div><div><dt>Lead time</dt><dd>1 day</dd></div><div><dt>Order cost</dt><dd>$3,008</dd></div></dl></article>
-                <article className="recommendedSupplier"><div className="supplierTitle"><strong>SRS Distribution</strong><span className="recommendedBadge">Recommended</span></div><dl><div><dt>Price / SQ</dt><dd>$91</dd></div><div><dt>Available</dt><dd>40 SQ</dd></div><div><dt>Lead time</dt><dd>1 day</dd></div><div><dt>Order cost</dt><dd>$2,912</dd></div></dl><p className="savingText">Save $96 with full quantity coverage.</p></article>
-                <article><div className="supplierTitle"><strong>Beacon</strong></div><dl><div><dt>Price / SQ</dt><dd>$88</dd></div><div><dt>Available</dt><dd>26 SQ</dd></div><div><dt>Lead time</dt><dd>2 days</dd></div><div><dt>Coverage</dt><dd className="warningText">Insufficient</dd></div></dl></article>
-              </div>
-              <button className="primaryButton fullButton" type="button" onClick={() => setView("purchase")}>Use SRS Distribution</button>
+              {suppliers.length > 0 ? (
+                <div className="supplierCards">
+                  {suppliers.map((supplier, index) => (
+                    <article className={index === 0 && suppliers.length > 1 ? "recommendedSupplier" : ""} key={`${supplier.provider}-${supplier.sku}`}>
+                      <div className="supplierTitle"><strong>{supplier.provider}</strong>{index === 0 && suppliers.length > 1 && <span className="recommendedBadge">Lowest current price</span>}</div>
+                      <dl>
+                        <div><dt>Price / {supplier.uom}</dt><dd>{money(Number(supplier.unit_price))}</dd></div>
+                        <div><dt>Available</dt><dd>{supplier.available_quantity ?? "Not reported"}</dd></div>
+                        <div><dt>Price date</dt><dd>{new Date(supplier.effective_at).toLocaleDateString()}</dd></div>
+                      </dl>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <section className="agentResult"><span className="statusText warningText">No comparison available</span><h4>No supplier price records were found for this material.</h4><p>BuildPilot will not recommend a supplier without stored evidence.</p></section>
+              )}
+              <section className="approvalNotice"><span>Purchase orders are not enabled yet</span><p>The current application database does not yet contain the purchase-order model, so BuildPilot will not pretend to create one.</p></section>
             </>
-          )}
-
-          {view === "purchase" && (
-            <>
-              <button className="backButton" type="button" onClick={() => setView("suppliers")}>← Back to suppliers</button>
-              <div className="approvalNotice"><span>Approval required</span><p>BuildPilot prepared this draft. Nothing will be created until you approve it.</p></div>
-              <section className="purchaseReview">
-                <div className="reviewRow"><span>Project</span><strong>{project.name}</strong></div>
-                <div className="reviewRow"><span>Vendor</span><strong>SRS Distribution</strong></div>
-                <div className="purchaseItem"><div><strong>Architectural shingles</strong><small>32 SQ × $91</small></div><b>$2,912</b></div>
-                <div className="reviewTotal"><span>Total</span><strong>$2,912</strong></div>
-                <div className="reviewRow"><span>Expected delivery</span><strong>Sep 04</strong></div>
-              </section>
-              <section className="recommendationCard compactRecommendation"><span className="sectionKicker">Why this option</span><p>SRS covers the full quantity, keeps the one-day lead time, and reduces the remaining order cost by $96.</p></section>
-              <div className="approvalActions"><button className="secondaryButton" type="button" onClick={() => setView("suppliers")}>Cancel</button><button className="primaryButton" type="button" onClick={() => setView("success")}>Approve & create PO</button></div>
-            </>
-          )}
-
-          {view === "success" && (
-            <div className="successState">
-              <div className="successIcon">✓</div>
-              <span className="statusText successText">Created successfully</span>
-              <h4>Purchase order #1052 is ready.</h4>
-              <p>SRS Distribution · $2,912 · Expected Sep 04</p>
-              <button className="primaryButton fullButton" type="button">View purchase order</button>
-              <button className="textButton" type="button" onClick={onClose}>Close</button>
-            </div>
           )}
         </div>
-
-        {view === "analysis" && (
-          <div className="agentComposer">
-            <input aria-label="Ask BuildPilot" placeholder="Ask about this project…" />
-            <button className="primaryButton" type="button">Send</button>
-          </div>
-        )}
       </aside>
     </>
   );
