@@ -1,4 +1,4 @@
-import WorkspacePage from "../src/pages/WorkspacePage";
+import WorkspacePage from "../src/application/pages/WorkspacePage";
 
 export default function Home() {
   return <WorkspacePage />;
