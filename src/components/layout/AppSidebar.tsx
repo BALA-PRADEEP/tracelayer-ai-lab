@@ -1,9 +1,16 @@
-import { PRIMARY_NAVIGATION, type PrimaryNavigationItem } from "../../constants/navigation";
+import type { PrimaryNavigationItem } from "../../constants/navigation";
 
 interface AppSidebarProps {
   active: PrimaryNavigationItem;
   onNavigate: (item: PrimaryNavigationItem) => void;
 }
+
+const sections: Array<{ label: string; items: Array<{ name: PrimaryNavigationItem; icon: string }> }> = [
+  { label: "", items: [{ name: "Overview", icon: "⌂" }] },
+  { label: "Work", items: [{ name: "Projects", icon: "▣" }, { name: "Estimates", icon: "◫" }] },
+  { label: "Operations", items: [{ name: "Procurement", icon: "⇄" }] },
+  { label: "Business", items: [{ name: "Customers", icon: "◎" }, { name: "Finance", icon: "$" }] },
+];
 
 export default function AppSidebar({ active, onNavigate }: AppSidebarProps) {
   return (
@@ -17,15 +24,22 @@ export default function AppSidebar({ active, onNavigate }: AppSidebarProps) {
       </div>
 
       <nav className="sideNav" aria-label="Primary">
-        {PRIMARY_NAVIGATION.map((item) => (
-          <button
-            key={item}
-            className={active === item ? "navItem navItemActive" : "navItem"}
-            type="button"
-            onClick={() => onNavigate(item)}
-          >
-            {item}
-          </button>
+        {sections.map((section) => (
+          <div className="navSection" key={section.label || "home"}>
+            {section.label && <span className="navSectionLabel">{section.label}</span>}
+            {section.items.map((item) => (
+              <button
+                key={item.name}
+                className={active === item.name ? "navItem navItemActive" : "navItem"}
+                type="button"
+                onClick={() => onNavigate(item.name)}
+                aria-current={active === item.name ? "page" : undefined}
+              >
+                <span className="navIcon" aria-hidden="true">{item.icon}</span>
+                <span>{item.name === "Overview" ? "Home" : item.name === "Procurement" ? "Purchasing" : item.name}</span>
+              </button>
+            ))}
+          </div>
         ))}
       </nav>
 
@@ -35,6 +49,7 @@ export default function AppSidebar({ active, onNavigate }: AppSidebarProps) {
           <strong>Bala Pradeep</strong>
           <span>Project manager</span>
         </div>
+        <button className="profileMore" type="button" aria-label="Account menu">•••</button>
       </div>
     </aside>
   );
