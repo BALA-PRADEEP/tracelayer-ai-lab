@@ -1,17 +1,22 @@
 interface AppTopbarProps {
   title: string;
+  context?: string;
 }
 
-export default function AppTopbar({ title }: AppTopbarProps) {
+export default function AppTopbar({ title, context }: AppTopbarProps) {
   return (
     <header className="topbar">
-      <div>
-        <span className="breadcrumb">Workspace / {title}</span>
+      <div className="topbarLocation">
+        <span className="breadcrumb">{context ? `${context} /` : "Workspace /"}</span>
         <h1>{title}</h1>
       </div>
       <div className="topbarActions">
-        <button className="ghostButton" type="button">Search</button>
-        <button className="primaryButton" type="button">Create</button>
+        <button className="globalSearch" type="button" aria-label="Search BuildPilot">
+          <span>⌕</span>
+          <span>Search projects, customers, POs…</span>
+          <kbd>⌘K</kbd>
+        </button>
+        <button className="newButton" type="button">+ New</button>
       </div>
     </header>
   );
