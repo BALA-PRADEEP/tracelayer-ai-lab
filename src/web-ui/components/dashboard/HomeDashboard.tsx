@@ -9,18 +9,19 @@ interface HomeDashboardProps {
 }
 
 export default function HomeDashboard({ projects, onOpenProject, onInvestigate }: HomeDashboardProps) {
-  const activeProjects = projects.filter((project) => project.status === "In progress");
+  const activeProjects = projects.filter((project) => ["active", "in progress"].includes(project.status.toLowerCase()));
   const atRisk = projects.filter((project) => project.risk === "At risk");
   const watch = projects.filter((project) => project.risk === "Watch");
-  const cedar = projects[0];
+  const attention = [...atRisk, ...watch].slice(0, 3);
+  const today = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric" }).format(new Date());
 
   return (
     <div className="pageStack">
       <section className="pageIntro">
         <div>
-          <p className="pageEyebrow">Tuesday, September 1</p>
-          <h2>Good afternoon</h2>
-          <p>Start with the work that needs attention, then move into the project details.</p>
+          <p className="pageEyebrow">{today}</p>
+          <h2>Project overview</h2>
+          <p>Start with jobs that are outside plan, then move into the project details.</p>
         </div>
         <div className="summaryChip">{activeProjects.length} active projects</div>
       </section>
@@ -29,51 +30,42 @@ export default function HomeDashboard({ projects, onOpenProject, onInvestigate }
         <div className="sectionHeadingRow">
           <div>
             <span className="sectionKicker">Needs attention</span>
-            <h3 id="attention-title">Two items need a decision</h3>
+            <h3 id="attention-title">{attention.length ? `${attention.length} ${attention.length === 1 ? "project needs" : "projects need"} review` : "No current cost exceptions"}</h3>
           </div>
-          <span className="sectionMeta">Updated moments ago</span>
+          <span className="sectionMeta">From current project records</span>
         </div>
 
-        <div className="attentionList">
-          <article className="attentionItem attentionCritical">
-            <div className="attentionSignal" aria-hidden="true">!</div>
-            <div className="attentionContent">
-              <div className="attentionTitleRow">
-                <div>
-                  <span className="statusText dangerText">Cost risk</span>
-                  <h4>{cedar.name}</h4>
+        {attention.length ? (
+          <div className="attentionList">
+            {attention.map((project) => (
+              <article className={`attentionItem ${project.risk === "At risk" ? "attentionCritical" : "attentionWarning"}`} key={project.id}>
+                <div className={`attentionSignal ${project.risk === "Watch" ? "warningSignal" : ""}`} aria-hidden="true">!</div>
+                <div className="attentionContent">
+                  <div className="attentionTitleRow">
+                    <div>
+                      <span className={`statusText ${project.risk === "At risk" ? "dangerText" : "warningText"}`}>{project.risk === "At risk" ? "Cost risk" : "Watch"}</span>
+                      <h4>{project.name}</h4>
+                    </div>
+                    <span className="timeMeta">{project.status}</span>
+                  </div>
+                  <p>{project.variance >= 0 ? `${money(project.variance)} above the current estimate.` : `${money(Math.abs(project.variance))} below the current estimate.`}</p>
+                  <div className="attentionFacts">
+                    <span><b>{project.variancePercent.toFixed(1)}%</b> variance</span>
+                    <span><b>{project.customer}</b> customer</span>
+                  </div>
+                  <div className="actionRow">
+                    <button className="primaryButton" type="button" onClick={() => onInvestigate(project)}>Review issue</button>
+                    <button className="secondaryButton" type="button" onClick={() => onOpenProject(project)}>Open project</button>
+                  </div>
                 </div>
-                <span className="timeMeta">2h ago</span>
-              </div>
-              <p>Material cost is {money(cedar.actual - cedar.estimate)} above plan. Shingles account for most of the increase.</p>
-              <div className="attentionFacts">
-                <span><b>{money(cedar.actual - cedar.estimate)}</b> variance</span>
-                <span><b>{cedar.margin}%</b> current margin</span>
-              </div>
-              <div className="actionRow">
-                <button className="primaryButton" type="button" onClick={() => onInvestigate(cedar)}>Review issue</button>
-                <button className="secondaryButton" type="button" onClick={() => onOpenProject(cedar)}>Open project</button>
-              </div>
-            </div>
-          </article>
-
-          <article className="attentionItem attentionWarning">
-            <div className="attentionSignal warningSignal" aria-hidden="true">!</div>
-            <div className="attentionContent">
-              <div className="attentionTitleRow">
-                <div>
-                  <span className="statusText warningText">Delivery risk</span>
-                  <h4>PO #1048 · Project Atlas</h4>
-                </div>
-                <span className="timeMeta">Today</span>
-              </div>
-              <p>The expected delivery is two days after the scheduled installation date.</p>
-              <div className="actionRow">
-                <button className="secondaryButton" type="button">Review purchase order</button>
-              </div>
-            </div>
-          </article>
-        </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="polishedEmpty">
+            <p>All active projects are currently within the cost thresholds calculated from recorded project data.</p>
+          </div>
+        )}
       </section>
 
       <section className="healthOverview" aria-label="Project health summary">
@@ -89,7 +81,6 @@ export default function HomeDashboard({ projects, onOpenProject, onInvestigate }
             <span className="sectionKicker">Your projects</span>
             <h3>Current work</h3>
           </div>
-          <button className="textButton" type="button">View all projects</button>
         </div>
         <ProjectTable projects={projects} onOpen={onOpenProject} />
       </section>
