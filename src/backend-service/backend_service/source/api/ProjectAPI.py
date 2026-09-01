@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from backend.source.service.ProjectService import ProjectService
+from backend_service.source.service.ProjectService import ProjectService
 
 PROJECT_API = APIRouter(prefix="/api/demo", tags=["Projects"])
 

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI
 
-from backend.source.api.ProjectAPI import PROJECT_API
+from backend_service.source.api.ProjectAPI import PROJECT_API
 
 app = FastAPI(
     title="BuildPilot API",

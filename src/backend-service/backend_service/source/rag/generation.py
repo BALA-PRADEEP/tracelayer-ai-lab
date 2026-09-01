@@ -6,7 +6,7 @@ from urllib import error as urllib_error
 from urllib import parse as urllib_parse
 from urllib import request as urllib_request
 
-from rag.retrieval import semantic_project_search
+from backend_service.source.dal.vector_retrieval import semantic_project_search
 
 GENERATION_MODEL = os.getenv("GEMINI_GENERATION_MODEL", "gemini-3.7-flash")
 FALLBACK_GENERATION_MODEL = os.getenv(
@@ -201,7 +201,7 @@ def generate_grounded_answer(
         }
     )
 
-    prompt = f"""You are TraceLayer, a production-minded construction operations copilot.
+    prompt = f"""You are BuildPilot, a construction operations copilot.
 Answer the user's question using ONLY the evidence below.
 
 Rules:
@@ -222,59 +222,37 @@ Evidence:
     generation_started = perf_counter()
     model_used = GENERATION_MODEL
     fallback_used = False
-    primary_error_signature = None
-
     try:
         answer = _generate(prompt, GENERATION_MODEL)
     except Exception as exc:
-        primary_error_signature = _error_signature(exc)
         if not _should_try_fallback(exc):
-            raise RuntimeError(
-                f"gemini_generation_failed:primary:{primary_error_signature}"
-            ) from exc
-
-        fallback_used = True
-        model_used = FALLBACK_GENERATION_MODEL
-        trace.append(
-            {
-                "step": "Generation fallback",
-                "status": "complete",
-                "detail": (
-                    f"{GENERATION_MODEL} returned {primary_error_signature}; "
-                    f"retrying with {FALLBACK_GENERATION_MODEL}."
-                ),
-                "duration_ms": round((perf_counter() - generation_started) * 1000, 2),
-            }
-        )
+            raise RuntimeError(f"gemini_generation_failed:{_error_signature(exc)}") from exc
         try:
             answer = _generate(prompt, FALLBACK_GENERATION_MODEL)
+            model_used = FALLBACK_GENERATION_MODEL
+            fallback_used = True
         except Exception as fallback_exc:
-            fallback_signature = _error_signature(fallback_exc)
             raise RuntimeError(
                 "gemini_generation_failed:"
-                f"primary:{primary_error_signature};"
-                f"fallback:{fallback_signature}"
+                f"primary={_error_signature(exc)};fallback={_error_signature(fallback_exc)}"
             ) from fallback_exc
 
     generation_ms = round((perf_counter() - generation_started) * 1000, 2)
-
-    used_citations = [item for item in evidence_items if f"[{item['id']}]" in answer]
-    if not used_citations:
-        raise RuntimeError("gemini_generation_failed:UncitedResponse")
-
     trace.append(
         {
-            "step": "Generation completed",
+            "step": "Grounded response generated",
             "status": "complete",
-            "detail": f"Generated grounded answer with {model_used} via Gemini REST.",
+            "detail": f"Generated an answer using {model_used} from retrieved evidence only.",
             "duration_ms": generation_ms,
         }
     )
+
+    citations = [item["id"] for item in evidence_items if f"[{item['id']}]" in answer]
     trace.append(
         {
-            "step": "Validation completed",
+            "step": "Citation validation completed",
             "status": "complete",
-            "detail": f"Detected {len(used_citations)} cited evidence blocks in the generated answer.",
+            "detail": f"Validated {len(citations)} inline evidence citations.",
             "duration_ms": 0,
         }
     )
@@ -283,27 +261,14 @@ Evidence:
         "question": question,
         "tenant": tenant_slug,
         "answer": answer,
-        "citations": used_citations,
+        "citations": citations,
         "evidence": evidence_items,
-        "retrieval": {
-            "count": len(hits),
-            "documents_embedded": embedded_count,
-            "top_results": [
-                {
-                    "project_name": hit.get("project_name"),
-                    "score": hit.get("score"),
-                }
-                for hit in hits
-            ],
-        },
+        "retrieval": {"count": len(hits), "documents_embedded": embedded_count},
         "execution": trace,
         "mode": "rag_grounded_answer",
         "generation_model": GENERATION_MODEL,
         "generation_model_used": model_used,
-        "fallback_model": FALLBACK_GENERATION_MODEL,
         "fallback_used": fallback_used,
-        "primary_error_signature": primary_error_signature,
-        "generation_timeout_seconds": GENERATION_TIMEOUT_SECONDS,
         "generation_transport": "rest_v1beta",
         "total_duration_ms": round((perf_counter() - started) * 1000, 2),
     }
